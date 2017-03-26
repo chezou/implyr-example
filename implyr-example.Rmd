@@ -1,0 +1,179 @@
+---
+title: "implyr Example"
+author: "Aki Ariga"
+date: "3/26/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setting up odbc for macOS
+
+### Install unixODBC with homebrew
+
+```{r, engine='bash', eval=FALSE}
+$ brew install unixodbc
+```
+
+### Download and install the latest version of the Impala ODBC driver from Cloudera.
+
+You can donwload [the latest Impala ODBC Driver](https://www.cloudera.com/downloads/connectors/impala/odbc.html).
+
+### Configure your .odbc.ini and .odbcinst.ini
+
+After installing Impala ODBC driver for macOS, basic configuration templates can be found in `/opt/cloudera/impalaodbc/Setup/`.
+
+```{r, engine='bash', eval=FALSE}
+cp /opt/cloudera/impalaodbc/Setup/odbc.ini ~/.odbc.ini
+cp /opt/cloudera/impalaodbc/Setup/odbcinst.ini ~/.odbcinst.ini
+```
+
+Before using following setting, you must replace `HOST` and `KrbRealm` with appropriate ones.
+
+```{r, engine='bash', eval=FALSE}
+[ODBC]
+# Specify any global ODBC configuration here such as ODBC tracing.
+
+[ODBC Data Sources]
+Impala=Cloudera ODBC Driver for Impala
+
+[Impala]
+
+# Description: DSN Description.
+# This key is not necessary and is only to give a description of the data source.
+Description=Cloudera Impala ODBC Driver DSN
+
+# Driver: The location where the ODBC driver is installed to.
+Driver=/opt/cloudera/impalaodbc/lib/universal/libclouderaimpalaodbc.dylib
+
+# The DriverUnicodeEncoding setting is only used for SimbaDM
+# When set to 1, SimbaDM runs in UTF-16 mode.
+# When set to 2, SimbaDM runs in UTF-8 mode.
+#DriverUnicodeEncoding=2
+
+# Values for HOST, PORT, KrbFQDN, and KrbServiceName should be set here.
+# They can also be specified on the connection string.
+HOST=[REPLACE_YOUR_IMPALA_HOST]
+PORT=21050
+Schema=default
+
+# The authentication mechanism.
+# 0 - No authentication (NOSASL)
+# 1 - Kerberos authentication (SASL)
+# 2 - Username authentication (SASL)
+# 3 - Username/password authentication (NOSASL or SASL depending on UseSASL configuration)
+AuthMech=1
+
+# Set to 1 to use SASL for authentication. 
+# Set to 0 to not use SASL. 
+# When using Kerberos authentication (SASL) or Username authentication (SASL) SASL is always used
+# and this configuration is ignored. SASL is always not used for No authentication (NOSASL).
+UseSASL=1
+
+# Kerberos related settings.
+KrbFQDN=_HOST
+KrbRealm=[REPLACE_YOUR_REALM]
+KrbServiceName=impala
+
+# Username/password authentication with SASL settings.
+UID=
+PWD=
+
+# Set to 0 to disable SSL.
+# Set to 1 to enable SSL.
+SSL=1
+CAIssuedCertNamesMismatch=1
+TrustedCerts=/opt/cloudera/impalaodbc/lib/universal/cacerts.pem
+
+# If you use SSL with AllowSelfSignedServerCert, you can set this configuration.
+#AllowSelfSignedServerCert=1
+
+# Specify the proxy user ID to use.
+#DelegationUID=
+
+# General settings
+TSaslTransportBufSize=1000
+RowsFetchedPerBlock=10000
+SocketTimeout=0
+StringColumnLength=32767
+UseNativeQuery=0
+
+```
+
+
+### Check the configuration
+
+After configuration, you should kinit with your pricipal.
+
+```{r, engine='bash', eval=FALSE}
+$ kinit $USER@YOUR_REALM
+```
+
+You should replace `$USER` for the appropriate user and `YOUR_REALM` with the appropriate REALM.
+
+Before using RStudio on you mac, you can check configuration with `isql` command.
+
+```{r, engine="bash", eval=FALSE}
+$ isql -v "Impala"
++---------------------------------------+
+| Connected!                            |
+|                                       |
+| sql-statement                         |
+| help [tablename]                      |
+| quit                                  |
+|                                       |
++---------------------------------------+
+SQL>
+```
+
+
+## Implyr Example
+
+After setting .odbc.ini you can connect secure Impala cluster with {implyr}. For instance, We will visualize [the airports data](http://openflights.org/data.html#airport).
+
+First, install R packages.
+
+```{r install_packages, eval = FALSE}
+install.packages(c("implyr", "odbc", "DBI", "dplyr", "ggplot2", "ggExtra"))
+```
+
+
+Then, connect the Impala cluster.
+
+```{r connect_impala}
+#Sys.setenv(DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib")
+library(implyr)
+library(odbc)
+drv <- odbc::odbc()
+impala <- src_impala(
+  drv = drv,
+  dsn = "Impala"
+)
+```
+
+Show the airports data. In this case, we assume the data is in `u_ariga` database, so that we will change database using `use u_ariga`.
+
+```{r access_flight_data}
+library(DBI)
+# Change database
+dbGetQuery(impala, "use u_ariga")
+dbGetQuery(impala, "show tables")
+airports <- tbl(impala, "airports_pq")
+
+View(airports)
+
+airports %>% filter(latitude < 35) %>% count()
+```
+
+Finally, we will show joint histogram of longitude and latitude.
+
+```{r show_example_histogram}
+airports_by_geo <- airports %>% select(longitude, latitude) %>% collect()
+
+library(ggplot2)
+
+p <- ggplot(airports_by_geo, aes(longitude, latitude)) + geom_point() + theme_classic()
+ggExtra::ggMarginal(p, type = "histogram")
+```
