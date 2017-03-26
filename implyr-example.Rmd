@@ -66,8 +66,8 @@ Schema=default
 # 3 - Username/password authentication (NOSASL or SASL depending on UseSASL configuration)
 AuthMech=1
 
-# Set to 1 to use SASL for authentication. 
-# Set to 0 to not use SASL. 
+# Set to 1 to use SASL for authentication.
+# Set to 0 to not use SASL.
 # When using Kerberos authentication (SASL) or Username authentication (SASL) SASL is always used
 # and this configuration is ignored. SASL is always not used for No authentication (NOSASL).
 UseSASL=1
@@ -158,7 +158,7 @@ Show the airports data. In this case, we assume the data is in `u_ariga` databas
 ```{r access_flight_data}
 library(DBI)
 # Change database
-dbGetQuery(impala, "use u_ariga")
+dbExecute(impala, "use u_ariga")
 dbGetQuery(impala, "show tables")
 airports <- tbl(impala, "airports_pq")
 

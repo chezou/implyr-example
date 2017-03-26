@@ -10,7 +10,7 @@ impala <- src_impala(
 
 library(DBI)
 # Change database
-dbGetQuery(impala, "use u_ariga")
+dbExecute(impala, "use u_ariga")
 dbGetQuery(impala, "show tables")
 airports <- tbl(impala, "airports_pq")
 airports %>% filter(latitude < 35) %>% count()
